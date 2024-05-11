@@ -1,4 +1,4 @@
-# Copyright 2024 Jungwoo Park (affjljoo3581)
+# Copyright 2024 Jungwoo Park (affjljoo3581) and Young Jin Ahn (snoop2head)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -147,9 +147,15 @@ def get_layer_index_fn(path: tuple[DictKey, ...], _: Any, num_layers: int = 12) 
     return num_layers
 
 
-def load_pretrained_params(args: argparse.Namespace, params: ArrayTree) -> ArrayTree:
+def load_pretrained_params(args: argparse.Namespace, params: ArrayTree, linear_probe:bool) -> ArrayTree:
     with wds.gopen(args.pretrained_ckpt) as fp:
         new_params = flax.serialization.msgpack_restore(fp.read())
+
+    print(
+        f"[*] load pretrained params with overlap of"
+        f" {len(set(new_params['model']).intersection(params['model']))}"
+        f"/{len(params['model'])}"
+    )
 
     # The positional embeddings will be resized when there is a difference in image
     # resolutions between pretraining and finetuning stage.
@@ -173,7 +179,11 @@ def load_pretrained_params(args: argparse.Namespace, params: ArrayTree) -> Array
         != params["model"]["head"]["kernel"].shape
     ):
         new_params["model"]["head"] = params["model"]["head"]
-
+    
+    # Reinitialize the classifier head if linear probing mode
+    if linear_probe:
+        new_params["model"]["head"] = params["model"]["head"]
+    
     # If `args.label_mapping` is specified, then the same labels will automatically
     # replaced with the pretrained ones.
     if args.label_mapping:
@@ -188,4 +198,5 @@ def load_pretrained_params(args: argparse.Namespace, params: ArrayTree) -> Array
         bias[dst] = new_params["model"]["head"]["bias"][src]
 
         new_params["model"]["head"] = {"kernel": kernel, "bias": bias}
+    
     return new_params

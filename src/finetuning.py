@@ -1,4 +1,4 @@
-# Copyright 2024 Jungwoo Park (affjljoo3581)
+# Copyright 2024 Jungwoo Park (affjljoo3581) and Young Jin Ahn (snoop2head)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ from typing import Callable
 
 import flax
 import flax.linen as nn
+import flax.linen.initializers as init
+
 import jax
 import jax.numpy as jnp
 import optax
@@ -32,6 +34,8 @@ from dataset import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from modeling import ViT
 from utils import Mixup, get_layer_index_fn, load_pretrained_params, modified_lamb
 
+Dense = partial(nn.Dense, kernel_init=init.truncated_normal(0.02))
+
 CRITERION_COLLECTION = {
     "ce": optax.softmax_cross_entropy,
     "bce": lambda x, y: optax.sigmoid_binary_cross_entropy(x, y > 0).mean(-1),
@@ -39,12 +43,16 @@ CRITERION_COLLECTION = {
 OPTIMIZER_COLLECTION = {
     "adamw": optax.adamw,
     "lamb": modified_lamb,
+    "lars": optax.lars,
+    "sgd": optax.sgd,
 }
 
 
 class TrainState(train_state.TrainState):
+    batch_stats: ArrayTree
     mixup_rng: PRNGKey
     dropout_rng: PRNGKey
+    noise_rng: PRNGKey
 
     micro_step: int = 0
     micro_in_mini: int = 1
@@ -53,19 +61,21 @@ class TrainState(train_state.TrainState):
     def split_rngs(self) -> tuple[ArrayTree, ArrayTree]:
         mixup_rng, new_mixup_rng = jax.random.split(self.mixup_rng)
         dropout_rng, new_dropout_rng = jax.random.split(self.dropout_rng)
+        noise_rng, new_noise_rng = jax.random.split(self.noise_rng)
 
-        rngs = {"mixup": mixup_rng, "dropout": dropout_rng}
-        updates = {"mixup_rng": new_mixup_rng, "dropout_rng": new_dropout_rng}
+        rngs = {"mixup": mixup_rng, "dropout": dropout_rng, "noise": noise_rng}
+        updates = {"mixup_rng": new_mixup_rng, "dropout_rng": new_dropout_rng, "noise_rng": new_noise_rng}
         return rngs, updates
 
     def replicate(self) -> TrainState:
         return flax.jax_utils.replicate(self).replace(
             mixup_rng=shard_prng_key(self.mixup_rng),
             dropout_rng=shard_prng_key(self.dropout_rng),
+            noise_rng=shard_prng_key(self.noise_rng),
         )
 
 
-class TrainModule(nn.Module):
+class FinetuneModule(nn.Module):
     model: ViT
     mixup: Mixup
     label_smoothing: float = 0.0
@@ -99,9 +109,15 @@ class TrainModule(nn.Module):
 @partial(jax.pmap, axis_name="batch", donate_argnums=0)
 def training_step(state: TrainState, batch: ArrayTree) -> tuple[TrainState, ArrayTree]:
     def loss_fn(params: ArrayTree) -> ArrayTree:
-        metrics = state.apply_fn({"params": params}, *batch, det=False, rngs=rngs)
+        metrics, updates = state.apply_fn(
+            {"params": params, "batch_stats": state.batch_stats},
+            *batch,
+            det=False,
+            rngs=rngs,
+            mutable=["batch_stats"],
+        )
         metrics = jax.tree_map(jnp.mean, metrics)
-        return metrics["loss"], metrics
+        return metrics["loss"], (metrics, updates)
 
     def update_fn(state: TrainState) -> TrainState:
         # Collect a global gradient from the accumulated gradients and apply actual
@@ -114,7 +130,7 @@ def training_step(state: TrainState, batch: ArrayTree) -> tuple[TrainState, Arra
         )
 
     rngs, updates = state.split_rngs()
-    (_, metrics), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)
+    (_, (metrics, updates)), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)
     metrics = jax.lax.pmean(metrics, axis_name="batch")
 
     # Update parameters with the gradients. If the gradient accumulation is enabled,
@@ -126,6 +142,7 @@ def training_step(state: TrainState, batch: ArrayTree) -> tuple[TrainState, Arra
         state = state.replace(
             grad_accum=jax.tree_map(lambda ga, g: ga + g, state.grad_accum, grads),
             micro_step=state.micro_step + 1,
+            batch_stats=updates['batch_stats']
         )
         state = jax.lax.cond(
             state.micro_step == state.micro_in_mini, update_fn, lambda x: x, state
@@ -135,12 +152,7 @@ def training_step(state: TrainState, batch: ArrayTree) -> tuple[TrainState, Arra
 
 @partial(jax.pmap, axis_name="batch")
 def validation_step(state: TrainState, batch: ArrayTree) -> ArrayTree:
-    metrics = state.apply_fn(
-        {"params": state.params},
-        images=batch[0],
-        labels=jnp.where(batch[1] != -1, batch[1], 0),
-        det=True,
-    )
+    metrics = state.apply_fn({"params": state.params, 'batch_stats': state.batch_stats}, images=batch[0], labels=jnp.where(batch[1] != -1, batch[1], 0), det=True)
     metrics["num_samples"] = batch[1] != -1
     metrics = jax.tree_map(lambda x: (x * (batch[1] != -1)).sum(), metrics)
     return jax.lax.psum(metrics, axis_name="batch")
@@ -160,8 +172,12 @@ def create_train_state(args: argparse.Namespace) -> TrainState:
         dropout=args.dropout,
         droppath=args.droppath,
         grad_ckpt=args.grad_ckpt,
+        image_mask_ratio=None,
+        linear_probing=True if args.mode == "linear" else False,
+        batch_norm=True if args.mode == "linear" else False,
     )
-    module = TrainModule(
+
+    module = FinetuneModule(
         model=model,
         mixup=Mixup(args.mixup, args.cutmix),
         label_smoothing=args.label_smoothing if args.criterion == "ce" else 0,
@@ -178,9 +194,15 @@ def create_train_state(args: argparse.Namespace) -> TrainState:
     init_rngs = {"params": jax.random.PRNGKey(args.init_seed)}
     print(module.tabulate(init_rngs, **example_inputs))
 
-    params = module.init(init_rngs, **example_inputs)["params"]
+    variables = module.init(init_rngs, **example_inputs)
+    params = variables["params"]
+    batch_stats = variables.get("batch_stats", None)
+    if batch_stats is not None:
+        print("BatchNorm statistics are initialized.")
+
     if args.pretrained_ckpt is not None:
-        params = load_pretrained_params(args, params)
+        params = load_pretrained_params(args, params, linear_probe=True if args.mode == "linear" else False)
+        print(f"Pretrained weights are loaded from {args.pretrained_ckpt}.")
     if args.grad_accum > 1:
         grad_accum = jax.tree_map(jnp.zeros_like, params)
 
@@ -192,11 +214,7 @@ def create_train_state(args: argparse.Namespace) -> TrainState:
     ) -> optax.GradientTransformation:
         tx = OPTIMIZER_COLLECTION[args.optimizer](
             learning_rate=learning_rate,
-            b1=args.adam_b1,
-            b2=args.adam_b2,
-            eps=args.adam_eps,
-            weight_decay=args.weight_decay,
-            mask=partial(tree_map_with_path, lambda kp, *_: kp[-1].key == "kernel"),
+            momentum=0.9,
         )
         if args.lr_decay < 1.0:
             layerwise_scales = {
@@ -210,19 +228,28 @@ def create_train_state(args: argparse.Namespace) -> TrainState:
             tx = optax.chain(optax.clip_by_global_norm(args.clip_grad), tx)
         return tx
 
+    if args.optimizer == "lars":
+        lr_peak_value = args.learning_rate * args.train_batch_size / 256
+    else: 
+        lr_peak_value = args.learning_rate
+    print(f"Peak learning rate: {lr_peak_value:.1e}")
+    
     learning_rate = optax.warmup_cosine_decay_schedule(
         init_value=1e-6,
-        peak_value=args.learning_rate,
+        peak_value=lr_peak_value,
         warmup_steps=args.warmup_steps,
         decay_steps=args.training_steps,
         end_value=1e-5,
     )
+
     return TrainState.create(
         apply_fn=module.apply,
         params=params,
+        batch_stats=batch_stats,
         tx=create_optimizer_fn(learning_rate),
         mixup_rng=jax.random.PRNGKey(args.mixup_seed + jax.process_index()),
         dropout_rng=jax.random.PRNGKey(args.dropout_seed + jax.process_index()),
+        noise_rng=jax.random.PRNGKey(args.noise_seed + jax.process_index()),
         micro_step=0,
         micro_in_mini=args.grad_accum,
         grad_accum=grad_accum if args.grad_accum > 1 else None,

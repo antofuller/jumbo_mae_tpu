@@ -1,4 +1,4 @@
-# Copyright 2024 Jungwoo Park (affjljoo3581)
+# Copyright 2024 Jungwoo Park (affjljoo3581) and Young Jin Ahn (snoop2head)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ def auto_augment_factory(args: argparse.Namespace) -> T.Transform:
 
 def create_transforms(args: argparse.Namespace) -> tuple[nn.Module, nn.Module]:
     if args.random_crop == "rrc":
-        train_transforms = [T.RandomResizedCrop(args.image_size, interpolation=3)]
+        train_transforms = [T.RandomResizedCrop(args.image_size, scale=(0.2, 1.0), interpolation=3)]
     elif args.random_crop == "src":
         train_transforms = [
             T.Resize(args.image_size, interpolation=3),
@@ -70,8 +70,8 @@ def create_transforms(args: argparse.Namespace) -> tuple[nn.Module, nn.Module]:
     train_transforms += [
         T.RandomHorizontalFlip(),
         auto_augment_factory(args),
-        T.ColorJitter(args.color_jitter, args.color_jitter, args.color_jitter),
-        T.RandomErasing(args.random_erasing, value="random"),
+        T.ColorJitter(args.color_jitter, args.color_jitter, args.color_jitter) if args.color_jitter > 0.0 else T.Identity(),
+        T.RandomErasing(args.random_erasing, value="random") if args.random_erasing > 0.0 else T.Identity(),
         T.PILToTensor(),
     ]
     valid_transforms = [
@@ -113,10 +113,17 @@ def create_dataloaders(
             wds.tarfile_to_samples(handler=wds.ignore_and_continue),
             wds.detshuffle(),
             wds.decode("pil", handler=wds.ignore_and_continue),
-            wds.to_tuple("jpg", "cls", handler=wds.ignore_and_continue),
-            partial(repeat_samples, repeats=args.augment_repeats),
-            wds.map_tuple(train_transform, torch.tensor),
         )
+    
+        if args.mode == "pretrain":
+            dataset.append(wds.to_tuple("jpg", handler=wds.ignore_and_continue))
+            dataset.append(partial(repeat_samples, repeats=args.augment_repeats))
+            dataset.append(wds.map_tuple(train_transform))
+        elif args.mode == "finetune" or args.mode == "linear":
+            dataset.append(wds.to_tuple("jpg", "cls", handler=wds.ignore_and_continue))
+            dataset.append(partial(repeat_samples, repeats=args.augment_repeats))
+            dataset.append(wds.map_tuple(train_transform, torch.tensor))
+
         train_dataloader = DataLoader(
             dataset,
             batch_size=args.train_batch_size // jax.process_count() // args.grad_accum,
@@ -133,9 +140,15 @@ def create_dataloaders(
             wds.split_by_worker,
             wds.cached_tarfile_to_samples(),
             wds.decode("pil"),
-            wds.to_tuple("jpg", "cls"),
-            wds.map_tuple(valid_transform, torch.tensor),
         )
+
+        if args.mode == "pretrain":
+            dataset.append(wds.to_tuple("jpg", handler=wds.ignore_and_continue))
+            dataset.append(wds.map_tuple(valid_transform))
+        elif args.mode == "finetune" or args.mode == "linear":
+            dataset.append(wds.to_tuple("jpg", "cls", handler=wds.ignore_and_continue))
+            dataset.append(wds.map_tuple(valid_transform, torch.tensor))
+
         valid_dataloader = DataLoader(
             dataset,
             batch_size=(batch_size := args.valid_batch_size // jax.process_count()),

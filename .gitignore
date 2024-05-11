@@ -214,3 +214,7 @@ pyrightconfig.json
 *.pth
 models/
 run.sh
+wandb
+_cache
+screenlog.0
+.python-version

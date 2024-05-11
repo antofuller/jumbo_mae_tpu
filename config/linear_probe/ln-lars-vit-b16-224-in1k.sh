@@ -1,0 +1,47 @@
+python3 src/main_finetune.py \
+    --mode linear \
+    --output-dir "$GCS_DATASET_DIR/CKPT" \
+    --pretrained-ckpt "$GCS_MODEL_PATH" \
+    --train-dataset-shards "$GCS_DATASET_DIR/imagenet-1k-wds/imagenet1k-train-{0000..1023}.tar" \
+    --valid-dataset-shards "$GCS_DATASET_DIR/imagenet-1k-wds/imagenet1k-validation-{00..63}.tar" \
+    --train-batch-size 16384 \
+    --valid-batch-size 512 \
+    --train-loader-workers 40 \
+    --valid-loader-workers 10 \
+    --random-crop rrc \
+    --color-jitter 0.0 \
+    --auto-augment "none" \
+    --random-erasing 0.0 \
+    --augment-repeats 1 \
+    --test-crop-ratio 0.875 \
+    --mixup 0.0 \
+    --cutmix 0.0 \
+    --criterion ce \
+    --label-smoothing 0.0 \
+    --layers 12 \
+    --dim 768 \
+    --heads 12 \
+    --labels 1000 \
+    --patch-size 16 \
+    --image-size 224 \
+    --posemb sincos2d \
+    --pooling cls \
+    --dropout 0.0 \
+    --droppath 0.0 \
+    --init-seed 1 \
+    --mixup-seed 1 \
+    --dropout-seed 1 \
+    --shuffle-seed 1 \
+    --optimizer lars \
+    --learning-rate 0.1 \
+    --lr-decay 1.0 \
+    --clip-grad 0.0 \
+    --grad-accum 1 \
+    --warmup-steps $((1281167 * 10 / 16384)) \
+    --training-steps $((1281167 * 90 / 16384)) \
+    --log-interval 10 \
+    --eval-interval $((1281167 * 1 / 16384)) \
+    --project MAE-JAX \
+    --name $(basename $0 .sh) \
+    --ipaddr $(curl -s ifconfig.me) \
+    --hostname $(hostname)
