@@ -131,8 +131,9 @@ $ gcloud compute tpus tpu-vm ssh tpu-name \
 
 To use the pretrained checkpoints, you can convert `.msgpack` to timm-compatible `.pth` files.
 ```bash
-$ python scripts/convert_flax_to_pytorch.py pretrain-vit-l16-224-in1k-800ep-best.msgpack
-$ ls pretrain-vit-l16-224-in1k-800ep-best.msgpack  pretrain-vit-l16-224-in1k-800ep-best.pth
+$ python scripts/convert_flax_to_pytorch.py pretrain-vit-l16-224-in1k-800ep-last.msgpack
+$ ls 
+pretrain-vit-l16-224-in1k-800ep-last.msgpack  pretrain-vit-l16-224-in1k-800ep-last.pth
 ```
 
 After converting `.msgpack` to `.pth`, you can load it with timm:
@@ -140,7 +141,7 @@ After converting `.msgpack` to `.pth`, you can load it with timm:
 >>> import torch
 >>> import timm
 >>> model = timm.create_model("vit_large_patch16_224", init_values=1e-4)
->>> model.load_state_dict(torch.load("pretrain-vit-l16-224-in1k-800ep-best.pth"))
+>>> model.load_state_dict(torch.load("pretrain-vit-l16-224-in1k-800ep-last.pth"))
 <All keys matched successfully>
 ```
 
