@@ -201,7 +201,7 @@ class LinearCLS(nn.Module):
         return x
 
 class ViT(ViTBase, nn.Module):
-    num_cls_tokens: int = 1
+    num_cls_tokens: int = 3
 
     def setup(self):
         self.embed = PatchEmbed(**self.kwargs)
@@ -257,7 +257,7 @@ class ViT(ViTBase, nn.Module):
         return self.head(x, det)
 
 class MAEDecoder(MAEBase, nn.Module):
-    num_cls_tokens: int = 1
+    num_cls_tokens: int = 3
 
     def setup(self):
         layer_fn = nn.remat(ViTLayer) if self.grad_ckpt else ViTLayer
