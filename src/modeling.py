@@ -149,7 +149,7 @@ class FeedForward(ViTBase, nn.Module):
 
 class ViTLayer(ViTBase, nn.Module):
     jumbo_mlp: nn.Module = None  # You must provide it explicitly later
-    num_cls_tokens: int = 1
+    num_cls_tokens: int = 3
 
     def setup(self):
         self.attn = Attention(**self.kwargs)
