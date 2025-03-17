@@ -229,7 +229,7 @@ class ViT(ViTBase, nn.Module):
         jumbo_kwargs['dim'] = self.dim * self.num_cls_tokens
         self.jumbo_mlp = FeedForward(**jumbo_kwargs)
 
-        layer_fn = nn.remat(ViTLayer) if self.grad_ckpt else JumboLayer
+        layer_fn = nn.remat(JumboLayer) if self.grad_ckpt else JumboLayer
         self.layer = [
             layer_fn(jumbo_mlp=self.jumbo_mlp, num_cls_tokens=self.num_cls_tokens, **self.kwargs)
             for _ in range(self.layers)
