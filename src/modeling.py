@@ -148,6 +148,25 @@ class FeedForward(ViTBase, nn.Module):
         return self.drop(self.w2(self.drop(nn.gelu(self.w1(x)), det)), det)
 
 class ViTLayer(ViTBase, nn.Module):
+    def setup(self):
+        self.attn = Attention(**self.kwargs)
+        self.ff = FeedForward(**self.kwargs)
+
+        self.norm1 = nn.LayerNorm()
+        self.norm2 = nn.LayerNorm()
+        self.drop = nn.Dropout(self.droppath, broadcast_dims=(1, 2))
+
+        self.scale1 = self.scale2 = 1.0
+        if self.layerscale:
+            self.scale1 = self.param("scale1", init.constant(1e-4), (self.dim,))
+            self.scale2 = self.param("scale2", init.constant(1e-4), (self.dim,))
+
+    def __call__(self, x: Array, det: bool = True) -> Array:
+        x = x + self.drop(self.scale1 * self.attn(self.norm1(x), det), det)
+        x = x + self.drop(self.scale2 * self.ff(self.norm2(x), det), det)
+        return x
+
+class JumboLayer(ViTBase, nn.Module):
     jumbo_mlp: nn.Module = None  # You must provide it explicitly later
     num_cls_tokens: int = 3
 
@@ -210,7 +229,7 @@ class ViT(ViTBase, nn.Module):
         jumbo_kwargs['dim'] = self.dim * self.num_cls_tokens
         self.jumbo_mlp = FeedForward(**jumbo_kwargs)
 
-        layer_fn = nn.remat(ViTLayer) if self.grad_ckpt else ViTLayer
+        layer_fn = nn.remat(ViTLayer) if self.grad_ckpt else JumboLayer
         self.layer = [
             layer_fn(jumbo_mlp=self.jumbo_mlp, num_cls_tokens=self.num_cls_tokens, **self.kwargs)
             for _ in range(self.layers)
