@@ -147,10 +147,9 @@ class FeedForward(ViTBase, nn.Module):
     def __call__(self, x: Array, det: bool = True) -> Array:
         return self.drop(self.w2(self.drop(nn.gelu(self.w1(x)), det)), det)
 
-
 class ViTLayer(ViTBase, nn.Module):
-    jumbo_mlp: nn.Module  # Shared jumbo MLP (wider MLP)
-    num_cls_tokens: int
+    jumbo_mlp: nn.Module = None  # You must provide it explicitly later
+    num_cls_tokens: int = 1
 
     def setup(self):
         self.attn = Attention(**self.kwargs)
