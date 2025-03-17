@@ -93,7 +93,7 @@ class PretrainModule(nn.Module):
 
         # DECODER: linear project and separate cls token (w/o CLS)
         x = self.decoder_proj(x)
-        encoder_cls, image_x = x[:, :1, :], x[:, 1:, :] # x[:, 0, :] decreases dimension
+        encoder_cls, image_x = x[:, :3, :], x[:, 3:, :] # x[:, 0, :] decreases dimension
         bs, seq_len, dim = image_x.shape
         
         # Mask the input representation
@@ -107,7 +107,7 @@ class PretrainModule(nn.Module):
         x = self.decoder_model(x, det=det)
 
         # Reconstruct the output based on image patches only (w/o CLS)
-        image_x = x[:, 1:, :]
+        image_x = x[:, 3:, :]
         image_output = self.decoder_image_output(image_x)
 
         image_patches = extract_patches(images, self.model.patch_size)
