@@ -255,7 +255,7 @@ class ViT(ViTBase, nn.Module):
         
         return self.head(x, det)
 
-class MAEDecoder(MAEBase, nn.Module):
+class MAEDecoder(MAEDecoderBase, nn.Module):
     num_cls_tokens: int = 3
 
     def setup(self):
