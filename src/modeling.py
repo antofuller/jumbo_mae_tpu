@@ -207,7 +207,6 @@ class ViT(ViTBase, nn.Module):
         self.drop = nn.Dropout(self.dropout)
 
         jumbo_kwargs = dict(self.kwargs)
-        jumbo_kwargs['hidden_dim'] = self.hidden_dim * self.num_cls_tokens
         jumbo_kwargs['dim'] = self.dim * self.num_cls_tokens
         self.jumbo_mlp = FeedForward(**jumbo_kwargs)
 
