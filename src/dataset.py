@@ -130,7 +130,7 @@ def create_dataloaders(
             num_workers=args.train_loader_workers,
             collate_fn=partial(collate_and_shuffle, repeats=args.augment_repeats),
             drop_last=True,
-            prefetch_factor=10,
+            prefetch_factor=4,
             persistent_workers=True,
         )
     if args.valid_dataset_shards is not None:
@@ -155,7 +155,7 @@ def create_dataloaders(
             num_workers=args.valid_loader_workers,
             collate_fn=partial(collate_and_pad, batch_size=batch_size),
             drop_last=False,
-            prefetch_factor=10,
+            prefetch_factor=4,
             persistent_workers=True,
         )
     return train_dataloader, valid_dataloader
