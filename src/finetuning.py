@@ -116,16 +116,16 @@ def training_step(state: TrainState, batch: ArrayTree) -> tuple[TrainState, Arra
             rngs=rngs,
             mutable=["batch_stats"],
         )
-        metrics = jax.tree_map(jnp.mean, metrics)
+        metrics = jax.tree_util.tree_map(jnp.mean, metrics)
         return metrics["loss"], (metrics, updates)
 
     def update_fn(state: TrainState) -> TrainState:
         # Collect a global gradient from the accumulated gradients and apply actual
         # parameter update with resetting the accumulations to zero.
-        grads = jax.tree_map(lambda g: g / state.micro_in_mini, state.grad_accum)
+        grads = jax.tree_util.tree_map(lambda g: g / state.micro_in_mini, state.grad_accum)
         return state.apply_gradients(
             grads=jax.lax.pmean(grads, axis_name="batch"),
-            grad_accum=jax.tree_map(jnp.zeros_like, state.grad_accum),
+            grad_accum=jax.tree_util.tree_map(jnp.zeros_like, state.grad_accum),
             micro_step=state.micro_step % state.micro_in_mini,
         )
 
@@ -140,7 +140,7 @@ def training_step(state: TrainState, batch: ArrayTree) -> tuple[TrainState, Arra
         state = state.apply_gradients(grads=jax.lax.pmean(grads, axis_name="batch"))
     else:
         state = state.replace(
-            grad_accum=jax.tree_map(lambda ga, g: ga + g, state.grad_accum, grads),
+            grad_accum=jax.tree_util.tree_map(lambda ga, g: ga + g, state.grad_accum, grads),
             micro_step=state.micro_step + 1,
             batch_stats=updates['batch_stats']
         )
@@ -154,7 +154,7 @@ def training_step(state: TrainState, batch: ArrayTree) -> tuple[TrainState, Arra
 def validation_step(state: TrainState, batch: ArrayTree) -> ArrayTree:
     metrics = state.apply_fn({"params": state.params, 'batch_stats': state.batch_stats}, images=batch[0], labels=jnp.where(batch[1] != -1, batch[1], 0), det=True)
     metrics["num_samples"] = batch[1] != -1
-    metrics = jax.tree_map(lambda x: (x * (batch[1] != -1)).sum(), metrics)
+    metrics = jax.tree_util.tree_map(lambda x: (x * (batch[1] != -1)).sum(), metrics)
     return jax.lax.psum(metrics, axis_name="batch")
 
 
@@ -204,7 +204,7 @@ def create_train_state(args: argparse.Namespace) -> TrainState:
         params = load_pretrained_params(args, params, linear_probe=True if args.mode == "linear" else False)
         print(f"Pretrained weights are loaded from {args.pretrained_ckpt}.")
     if args.grad_accum > 1:
-        grad_accum = jax.tree_map(jnp.zeros_like, params)
+        grad_accum = jax.tree_util.tree_map(jnp.zeros_like, params)
 
     # Create learning rate scheduler and optimizer with gradient clipping. The learning
     # rate will be recorded at `hyperparams` by `optax.inject_hyperparameters`.
