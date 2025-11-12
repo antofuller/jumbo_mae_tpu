@@ -33,14 +33,14 @@ python3 src/main_finetune.py \
     --dropout-seed 1 \
     --shuffle-seed 1 \
     --optimizer adamw \
-    --learning-rate 1.0e-3 \
+    --learning-rate 2.5e-4 \
     --lr-decay 0.65 \
     --clip-grad 0.0 \
     --grad-accum 1 \
-    --warmup-steps $((1281167 * 10 / 16384)) \
-    --training-steps $((1281167 * 90 / 16384)) \
+    --warmup-steps $((1281167 * 10 / 1024)) \
+    --training-steps $((1281167 * 100 / 1024)) \
     --log-interval 10 \
-    --eval-interval $((1281167 * 1 / 16384)) \
+    --eval-interval $((1281167 * 1 / 1024)) \
     --project MAE-JAX \
     --name $(basename $0 .sh) \
     --ipaddr $(curl -s ifconfig.me) \
