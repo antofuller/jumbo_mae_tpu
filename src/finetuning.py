@@ -212,10 +212,20 @@ def create_train_state(args: argparse.Namespace) -> TrainState:
     def create_optimizer_fn(
         learning_rate: optax.Schedule,
     ) -> optax.GradientTransformation:
-        tx = OPTIMIZER_COLLECTION[args.optimizer](
-            learning_rate=learning_rate,
-            momentum=0.9,
-        )
+        if args.optimizer == "sgd":
+            tx = OPTIMIZER_COLLECTION[args.optimizer](
+                learning_rate=learning_rate,
+                momentum=0.9,
+            )
+        elif args.optimizer == "lars":
+            tx = OPTIMIZER_COLLECTION[args.optimizer](
+                learning_rate=learning_rate,
+                momentum=0.9,
+            )
+        else:  # adamw, lamb
+            tx = OPTIMIZER_COLLECTION[args.optimizer](
+                learning_rate=learning_rate,
+            )
         if args.lr_decay < 1.0:
             layerwise_scales = {
                 i: optax.scale(args.lr_decay ** (args.layers - i))
