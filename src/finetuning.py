@@ -109,12 +109,16 @@ class FinetuneModule(nn.Module):
 @partial(jax.pmap, axis_name="batch", donate_argnums=0)
 def training_step(state: TrainState, batch: ArrayTree) -> tuple[TrainState, ArrayTree]:
     def loss_fn(params: ArrayTree) -> ArrayTree:
+        variables = {"params": params}
+        if state.batch_stats is not None:
+            variables["batch_stats"] = state.batch_stats
+        
         metrics, updates = state.apply_fn(
-            {"params": params, "batch_stats": state.batch_stats},
+            variables,
             *batch,
             det=False,
             rngs=rngs,
-            mutable=["batch_stats"],
+            mutable=["batch_stats"] if state.batch_stats is not None else [],
         )
         metrics = jax.tree_util.tree_map(jnp.mean, metrics)
         return metrics["loss"], (metrics, updates)
