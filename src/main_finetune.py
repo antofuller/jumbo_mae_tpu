@@ -37,12 +37,12 @@ warnings.filterwarnings("ignore")
 def evaluate(state: TrainState, dataloader: DataLoader) -> dict[str, float]:
     average_meter = AverageMeter()
     for batch in tqdm.tqdm(dataloader, leave=False, dynamic_ncols=True):
-        metrics = validation_step(state, shard(jax.tree_map(np.asarray, batch)))
+        metrics = validation_step(state, shard(jax.tree_util.tree_map(np.asarray, batch)))
         average_meter.update(**jax.device_get(unreplicate(metrics)))
 
     metrics = average_meter.summary("val/")
     num_samples = metrics.pop("val/num_samples")
-    return jax.tree_map(lambda x: x / num_samples, metrics)
+    return jax.tree_util.tree_map(lambda x: x / num_samples, metrics)
 
 
 def main(args: argparse.Namespace):
@@ -60,7 +60,7 @@ def main(args: argparse.Namespace):
     # TRAIN
     for step in tqdm.trange(1, args.training_steps + 1, dynamic_ncols=True):
         for _ in range(args.grad_accum):
-            batch = shard(jax.tree_map(np.asarray, next(train_dataloader_iter)))
+            batch = shard(jax.tree_util.tree_map(np.asarray, next(train_dataloader_iter)))
             state, metrics = training_step(state, batch)
             average_meter.update(**unreplicate(metrics))
 
