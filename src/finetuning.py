@@ -152,7 +152,10 @@ def training_step(state: TrainState, batch: ArrayTree) -> tuple[TrainState, Arra
 
 @partial(jax.pmap, axis_name="batch")
 def validation_step(state: TrainState, batch: ArrayTree) -> ArrayTree:
-    metrics = state.apply_fn({"params": state.params, 'batch_stats': state.batch_stats}, images=batch[0], labels=jnp.where(batch[1] != -1, batch[1], 0), det=True)
+    variables = {"params": state.params}
+    if state.batch_stats is not None:
+        variables["batch_stats"] = state.batch_stats
+    metrics = state.apply_fn(variables, images=batch[0], labels=jnp.where(batch[1] != -1, batch[1], 0), det=True)
     metrics["num_samples"] = batch[1] != -1
     metrics = jax.tree_util.tree_map(lambda x: (x * (batch[1] != -1)).sum(), metrics)
     return jax.lax.psum(metrics, axis_name="batch")
