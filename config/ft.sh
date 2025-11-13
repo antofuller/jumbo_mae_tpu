@@ -11,7 +11,7 @@ python3 src/main_finetune.py \
     --random-crop rrc \
     --color-jitter 0.0 \
     --auto-augment "rand-m9-mstd0.5-inc1" \
-    --random-erasing 0.25 \
+    --random-erasing 0.0 \
     --augment-repeats 1 \
     --test-crop-ratio 0.875 \
     --mixup 0.8 \
