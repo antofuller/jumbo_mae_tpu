@@ -33,7 +33,7 @@ python3 src/main_finetune.py \
     --dropout-seed 1 \
     --shuffle-seed 1 \
     --optimizer adamw \
-    --learning-rate 2.5e-4 \
+    --learning-rate 4.0e-3 \
     --lr-decay 0.65 \
     --clip-grad 0.0 \
     --grad-accum 1 \
