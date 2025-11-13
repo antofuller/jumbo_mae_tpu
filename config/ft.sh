@@ -33,11 +33,11 @@ python3 src/main_finetune.py \
     --dropout-seed 1 \
     --shuffle-seed 1 \
     --optimizer adamw \
-    --learning-rate 4.0e-3 \
-    --lr-decay 0.65 \
+    --learning-rate 1.0e-3 \
+    --lr-decay 0.75 \
     --clip-grad 0.0 \
     --grad-accum 1 \
-    --warmup-steps $((1281167 * 10 / 1024)) \
+    --warmup-steps $((1281167 * 20 / 1024)) \
     --training-steps $((1281167 * 100 / 1024)) \
     --log-interval 10 \
     --eval-interval $((1281167 * 1 / 1024)) \
