@@ -232,6 +232,11 @@ def create_train_state(args: argparse.Namespace) -> TrainState:
         else:  # adamw, lamb
             tx = OPTIMIZER_COLLECTION[args.optimizer](
                 learning_rate=learning_rate,
+                b1=args.adam_b1,
+                b2=args.adam_b2,
+                eps=args.adam_eps,
+                weight_decay=args.weight_decay,
+                mask=partial(tree_map_with_path, lambda kp, *_: kp[-1].key == "kernel"),
             )
         if args.lr_decay < 1.0:
             layerwise_scales = {
