@@ -159,44 +159,44 @@ def load_pretrained_params(args: argparse.Namespace, params: ArrayTree, linear_p
 
     # The positional embeddings will be resized when there is a difference in image
     # resolutions between pretraining and finetuning stage.
-    if (
-        args.posemb == "learnable"
-        and new_params["model"]["embed"]["wpe"].shape
-        != params["model"]["embed"]["wpe"].shape
-    ):
-        new_params["model"]["embed"]["wpe"] = jax.image.resize(
-            new_params["model"]["embed"]["wpe"],
-            params["model"]["embed"]["wpe"].shape,
-            method="bicubic",
-        )
+    # if (
+    #     args.posemb == "learnable"
+    #     and new_params["model"]["embed"]["wpe"].shape
+    #     != params["model"]["embed"]["wpe"].shape
+    # ):
+    #     new_params["model"]["embed"]["wpe"] = jax.image.resize(
+    #         new_params["model"]["embed"]["wpe"],
+    #         params["model"]["embed"]["wpe"].shape,
+    #         method="bicubic",
+    #     )
 
     # Reinitialize the classifier head if the model was pretrained on different dataset
     # and `args.label_mapping` is not specified.
-    if (
-        "head" not in new_params["model"]
-        or args.label_mapping is None
-        and new_params["model"]["head"]["kernel"].shape
-        != params["model"]["head"]["kernel"].shape
-    ):
-        new_params["model"]["head"] = params["model"]["head"]
+    # if (
+    #     "head" not in new_params["model"]
+    #     or args.label_mapping is None
+    #     and new_params["model"]["head"]["kernel"].shape
+    #     != params["model"]["head"]["kernel"].shape
+    # ):
+    #     new_params["model"]["head"] = params["model"]["head"]
     
-    # Reinitialize the classifier head if linear probing mode
-    if linear_probe:
-        new_params["model"]["head"] = params["model"]["head"]
+    # # Reinitialize the classifier head if linear probing mode
+    # if linear_probe:
+    #     new_params["model"]["head"] = params["model"]["head"]
     
     # If `args.label_mapping` is specified, then the same labels will automatically
     # replaced with the pretrained ones.
-    if args.label_mapping:
-        with wds.gopen(args.label_mapping) as fp:
-            label_mapping = json.load(fp)
-            src, dst = label_mapping["src"], label_mapping["dst"]
+    # if args.label_mapping:
+    #     with wds.gopen(args.label_mapping) as fp:
+    #         label_mapping = json.load(fp)
+    #         src, dst = label_mapping["src"], label_mapping["dst"]
 
-        kernel = np.zeros_like(params["model"]["head"]["kernel"])
-        kernel[:, dst] = new_params["model"]["head"]["kernel"][:, src]
+    #     kernel = np.zeros_like(params["model"]["head"]["kernel"])
+    #     kernel[:, dst] = new_params["model"]["head"]["kernel"][:, src]
 
-        bias = np.full_like(params["model"]["head"]["bias"], fill_value=-10.0)
-        bias[dst] = new_params["model"]["head"]["bias"][src]
+    #     bias = np.full_like(params["model"]["head"]["bias"], fill_value=-10.0)
+    #     bias[dst] = new_params["model"]["head"]["bias"][src]
 
-        new_params["model"]["head"] = {"kernel": kernel, "bias": bias}
+    #     new_params["model"]["head"] = {"kernel": kernel, "bias": bias}
     
     return new_params
