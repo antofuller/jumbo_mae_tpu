@@ -261,7 +261,7 @@ def create_train_state(args: argparse.Namespace) -> TrainState:
         peak_value=lr_peak_value,
         warmup_steps=args.warmup_steps,
         decay_steps=args.training_steps,
-        end_value=1e-5,
+        end_value=1e-6,
     )
 
     return TrainState.create(
