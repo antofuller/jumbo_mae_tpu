@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-for wd in 0.06 0.7; do
+for wd in 0.06 0.07; do
   for lr in 1e-3 3e-3; do
     echo "Running with weight_decay=${wd}, learning_rate=${lr}"
 
